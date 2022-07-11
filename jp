@@ -1,0 +1,246 @@
+#!/usr/bin/env perl
+
+package Mojo::Collection::Role::Jp;
+use Mojo::Base -strict, -role, -signatures;
+
+sub csv ($self, $show_pointer, $delimiter="\t") { $self->map('csv', $show_pointer, $delimiter)->join("\n") }
+
+package Jp;
+use Mojo::Base -base, -signatures;
+use overload '""' => sub { shift->to_string }, fallback => 1;
+
+use Data::Walk::More;
+use Mojo::Collection;
+use Mojo::JSON qw(j);
+use Mojo::JSON::Pointer;
+use Mojo::Util;
+
+has [qw(pointer value)];
+has deref_arrays => 1;
+has ignore_case => 0;
+
+Mojo::Util::monkey_patch __PACKAGE__,
+  c => sub { Mojo::Collection->with_roles('+Jp')->new(@_) };
+
+sub csv ($self, $show_pointer, $delimiter="\t") {
+  c(($show_pointer?$self->pointer:()), $self->to_string($delimiter))->join($delimiter)
+}
+
+sub mjp ($self, @pointers) {
+  my $P = Mojo::JSON::Pointer->new($self->value);
+  @pointers = ('/') unless scalar @pointers;
+  $self->new(
+    deref_arrays => $self->deref_arrays,
+    ignore_case => $self->ignore_case,
+    pointer => $self->pointer,
+    value => c(map {
+      $self->new(
+        deref_arrays => $self->deref_arrays,
+        ignore_case => $self->ignore_case,
+        pointer => $_,
+        value => $P->get(m!^/$!?'':$_)
+      )
+    } @pointers)
+  );
+}
+
+sub json ($self) {
+  $self->deref_arrays && ref $self->value eq 'ARRAY'
+    ? @{$self->value}
+    : j($self->value)||$self->value||''
+}
+
+sub jp ($self, $pointer) {
+  my $W;
+  walk(sub {
+    my $p = join "/", '', @Data::Walk::More::indexes;
+    $W->{($self->ignore_case?lc($p):$p)||'/'} = $_
+  }, $self->value);
+  $W->{$self->ignore_case ? lc($pointer) : $pointer};
+}
+
+sub to_string ($self, $delimiter="\t") {
+  return ref $self->value && $self->value->isa('Mojo::Collection')
+    ? $self->value->map('json')->join($delimiter)
+    : $self->json;
+  my $value = $self->value;
+  if (!ref $value) { return $value }
+  elsif (ref $value eq 'HASH') { return $self->json }
+  elsif (ref $value eq 'ARRAY') { return $self->json }
+  elsif ($value->isa('Mojo::Collection')) { return $value->map('json')->join($delimiter) }
+  else { return $self->json }
+}
+
+package main;
+use Mojo::Base -strict, -signatures;
+
+use Data::Walk::More;
+use Mojo::ByteStream;
+use Mojo::Collection;
+use Mojo::File;
+use Mojo::JSON qw(j);
+use Mojo::JSON::Pointer;
+use Mojo::URL;
+use Mojo::Util qw(dumper);
+use Scalar::Util qw(blessed);
+
+use constant DEBUG => $ENV{JP_DEBUG} || 0;
+use constant TRAVERSE => !!(eval { require Data::Traverse; Data::Traverse::ignore_unsupported_refs(1); 1 });
+Data::Traverse->import('traverse') if TRAVERSE;
+
+Mojo::Util::monkey_patch __PACKAGE__,
+  c => sub { Mojo::Collection->with_roles('+Jp')->new(@_) },
+  f => sub { Mojo::File::path(@_) },
+  l => sub { Mojo::URL->new(@_) },
+  r => sub { Mojo::Util::dumper(@_) };
+
+my $DEBUG;
+my $OUT;
+my $stdin;
+
+Mojo::Util::getopt \@ARGV, ['bundling'],
+  'A'   => \my $deref_arrays,
+  'E=s' => \my $eval,
+  'M=s' => \my $message,
+  'T=s' => \my $test,
+  'X'   => \&_examples,
+  'd=s' => \(my $delimiter = "\t"),
+  'h+'  => \my $help,
+  'i'   => \my $ignore_case,
+  'n=i' => \my $head,
+  'p'   => \my $show_pointer,
+  'r=s' => \(my $regex = '/'),
+  'v'   => \my $verbose;
+
+&_usage($help) if $help;
+
+local $_ = &_walk(&_ptr(&_stdin))->grep(sub {
+  $_->pointer =~ ($ignore_case ? qr(^$regex$)i : qr(^$regex$)) or return 0 if $regex;
+  return 1;
+});
+
+$eval = "no warnings; $eval" if $verbose && $eval;
+$_ = eval $eval if $eval;
+warn ($@ =~ s/at \(eval \d+\) line \d+.*/in -E eval/r) if $verbose && $@;
+$_ = &c unless blessed $_ && $_->isa('Mojo::Collection');
+$_ = $_->map(sub { $_->mjp(@ARGV) });
+
+_say(
+  defined $head
+    ? $_->head($head)->csv($show_pointer, $delimiter)
+    : $_->csv($show_pointer, $delimiter)
+);
+
+sub D { $DEBUG=1; _debug(@_); $DEBUG=0; return (@_); }
+
+sub out { $OUT.=shift."\n" }
+
+sub _debug { warn dumper({ref($_[0]) => [@_?@_:$_]}) if DEBUG || $DEBUG }
+
+sub _ptr { Mojo::JSON::Pointer->new(j(shift//$stdin)) }
+
+sub _stdin {
+  local $/ = undef;
+  $stdin ||= <STDIN>;
+  return $stdin;
+}
+
+sub _say ($say) {
+  $OUT && not defined $test and chomp $OUT unless length $say;
+  $say = $OUT.$say if $OUT;
+  do { say $say if length $say; exit } if not defined $test;
+  $message = join ' ', ($message||'Test'), @ARGV;
+  my $exit = $say =~ qr(^$test$) ? 0 : 1;
+  $say =~ s/\n/\\n/g; $say =~ s/\t/\\t/g;
+  $test =~ s/\n/\\n/g; $test =~ s/\t/\\t/g;
+  say $exit ? "\033[31mfail\033[0m: '$message' is '$say', expected '$test'" : "\033[32mok\033[0m: '$message' is '$test'" if $message;
+  exit $exit;
+}
+
+sub _usage ($help) {
+  print <<EOF;
+  Usage: $0 [OPTIONS] [POINTERS]
+
+    Options:
+      -A               Dereference JSON arrays into columns
+      -E eval-string   Evaluate the Perl eval string
+                       These functions and variables, in addition to standard
+                       Perl functions and variables, are:
+         \$_            A Mojo::Collection of [JP OBJECTS]
+         D             Dump an object to inspect it
+         out           Print to stdout and include it in test inspection
+         c             Create a new Mojo::Collection object
+         f             Create a new Mojo::File object
+         l             Create a new Mojo::URL object
+         r             Alias to Mojo::Util::dumper
+         traverse      Imported from Data::Traverse, if available
+      -M test-message  Specify a message inthe test output
+      -T regex         Compare the results against the supplied regex
+      -d delimiter     Delimiter to use in columnar output
+      -h               Display this help, one more to include examples
+      -i               Ignore case in regex JSON pointers
+      -n head-number   Display the top n results, n can be negative
+      -p               Include the pointer in the columnar output
+      -r regex-pointer A regex JSON pointer for selecting multiple targets
+      -v               Increase verbosity
+    
+    Jp Objects:
+      An object with pointer and value attributes. The primary method to use
+      for this object when iterating a collection is the `jp` method which
+      is used to further expand the JSON object by pointer. See the last
+      example for a very practical use case of the Jp object which allows
+      further filtering the results of the regex pointer (-r) by iterating the
+      \$_ Mojo::Collection of Jp objects with the use of the `grep` method and
+      using a JSON Pointer with the `jp` method on each Jp object.
+
+    Pointers:
+      Any remaining non-flag arguments are considered JSON pointers and used to
+      narrow the selection from the selected JSON string for columnar output.
+EOF
+  exit 1 unless $help > 1;
+  print <<'EOF';
+
+  Examples:
+    (All examples read example.json from stdin, as shown by the first example)
+
+    $ jp < example.json
+    {"Version":"1","artifactory":[{...},{...},{...}]}
+
+    $ jp /artifactory/0/password
+    s3cr3t
+
+    $ jp -n 1 -r '/artifactory/\d+'
+    {...}
+
+    $ jp -n 1 -p -r '/artifactory/\d+' /user /password -T '/artifactory/\d+\t\d+\t\w+\n/artifactory/\d+\t\d+\t\w+\n/artifactory/\d+\t\d+\t\w+'
+    /artifactory/0  12345 s3cr3t
+
+    $ jp -Aip -n -1 -d: -E '$_->grep(sub{$_->jp("/isdefault")})' -r '/Artifactory/\d' /user /password
+    /artifactory/1:54321:s3cr3t5
+
+    $ jp -n 1 -E '$_->tap(sub{out $_->size})->tap(sub{out $_->size})' -r '/artifactory/\d+' /user /password -T '3\n3\n12345\ts3cr3t'
+    ok: 'Test /user /password' is '3\n3\n12345\ts3cr3t'
+
+    $ jp -v -n 1 -E '$_->tap(sub{out $_->size})->tap(sub{die 123}' -r '/artifactory/\d+' /user /password 
+    syntax error in -E eval
+EOF
+  exit 1;
+}
+
+sub _walk ($P, $pointer='/') {
+  my $W;
+  local $_ = $pointer;
+  walk(sub {
+    my $p = join "/", '', @Data::Walk::More::indexes;
+    $W->{($ignore_case?lc($p):$p)||'/'} = $_
+  }, $P->get(m!^/$!?'':$_));
+  c(map {
+    Jp->new(
+      deref_arrays => $deref_arrays,
+      ignore_case => $ignore_case,
+      pointer => $_,
+      value => $W->{$_}
+    )
+  } keys %$W)
+    ->sort(sub{$a->pointer cmp $b->pointer});
+}

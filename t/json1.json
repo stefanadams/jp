@@ -1,0 +1,32 @@
+{
+  "artifactory": [
+    {
+      "url": "https://redacted.jfrog.io/redacted/",
+      "user": "0038137",
+      "password": "REDACTED_APIKEYfalse",
+      "serverId": "redacted",
+      "isDefault": false,
+      "hash": {"a": 1},
+      "array": ["a", "b", "c"]
+    },
+    {
+      "url": "https://redacted.jfrog.io/redacted1/",
+      "user": "0038137",
+      "password": "REDACTED1_APIKEYtrue",
+      "serverId": "redacted",
+      "isDefault": true,
+      "hash": {"a": 2},
+      "array": ["a", "b", "c"]
+    },
+    {
+      "url": "https://redacted.jfrog.io/redacted/",
+      "user": "0038137",
+      "password": "REDACTED_APIKEYtrue",
+      "serverId": "redacted",
+      "isDefault": true,
+      "hash": {"a": 3},
+      "array": ["a", "b", "c"]
+    }
+  ],
+  "Version": "1"
+}
