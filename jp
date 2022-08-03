@@ -206,7 +206,7 @@ sub _say ($say) {
   $say = $OUT.$say if $OUT;
   chomp $say;
   do { say $say if length $say; exit } if not defined $test;
-  $message = join ' ', ($message||'Test'), @ARGV;
+  $message = join ' ', ($message//'Test'), @ARGV if $message || not defined $message;
   $say ||= $eval_err if $eval_err;
   local $_ = $say;
   my $exit;
