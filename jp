@@ -218,7 +218,7 @@ sub _say ($say) {
     $test = "qr(^$test\$)";
   }
   elsif (defined $eval_test) {
-    my $j = j($_);
+    my $j = j("$_");
     $exit = eval $test ? 0 : 1;
   }
   $say =~ s/\n/\\n/g; $say =~ s/\t/\\t/g;
