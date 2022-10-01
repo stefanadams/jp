@@ -51,7 +51,8 @@ a an extra powerful eval option for filtering the data structure.
       -n head-number   Display the top n results, n can be negative
       -p               Include the pointer in the columnar output
       -r regex-pointer A regex JSON pointer for selecting multiple targets
-      -v               Increase verbosity
+      -V               Increase verbosity
+      -v               Display version and exit
     
     Jp Objects:
       An object with pointer and value attributes. The primary method to use for this object when iterating a collection
@@ -88,9 +89,9 @@ a an extra powerful eval option for filtering the data structure.
         -T '3\n3\n12345\ts3cr3t'
     ok: 'Test /user /password' is '3\n3\n12345\ts3cr3t'
     # A syntax error in the -E Perl eval is handled gracefully (final tap method is missing a closing ')')
-    $ jp -v -n 1 -E '$_->tap(sub{out $_->size})->tap(sub{die 123}' -r '/server/\d+' /user /password 
+    $ jp -V -n 1 -E '$_->tap(sub{out $_->size})->tap(sub{die 123}' -r '/server/\d+' /user /password 
     syntax error in -E eval
     # Don't sort by pointer, sort arbitrarily as specified in the -E Perl eval
-    $ jp -v -S -U -p -r '/markers/\d' -E '$_->sort(sub{$a->jp("/location/0", "/position/0") <=> $b->jp("/location/0", "/position/0")})' /location /position <<EOF
+    $ jp -V -S -U -p -r '/markers/\d' -E '$_->sort(sub{$a->jp("/location/0", "/position/0") <=> $b->jp("/location/0", "/position/0")})' /location /position <<EOF
     {"markers":[{"name":"Google","position":[40.741,-74.005]},{"name":"Microsoft","location":[40.756,-73.990]},{"name":"Tesla","location":[40.7411,-74.009]},{"name":"Amazon","location":[40.753,-74.001]}]}
 ```
