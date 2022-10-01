@@ -1,7 +1,7 @@
 {
-  "artifactory": [
+  "server": [
     {
-      "url": "https://redacted.jfrog.io/redacted/",
+      "url": "https://example.com/",
       "user": "0038137",
       "password": "REDACTED_APIKEYfalse",
       "serverId": "redacted",
@@ -10,7 +10,7 @@
       "array": ["a", "b", "c"]
     },
     {
-      "url": "https://redacted.jfrog.io/redacted1/",
+      "url": "https://example.com1/",
       "user": "0038137",
       "password": "REDACTED1_APIKEYtrue",
       "serverId": "redacted",
@@ -19,7 +19,7 @@
       "array": ["a", "b", "c"]
     },
     {
-      "url": "https://redacted.jfrog.io/redacted/",
+      "url": "https://example.com/",
       "user": "0038137",
       "password": "REDACTED_APIKEYtrue",
       "serverId": "redacted",
