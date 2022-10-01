@@ -1,4 +1,5 @@
 0.11
+  - fix remove_undef
 
 0.10  2022-08-14
   - First pre-release

@@ -60,6 +60,7 @@ sub mjp ($self, @pointers) {
     deref_arrays => $self->deref_arrays,
     ignore_case => $self->ignore_case,
     pointer => $self->pointer,
+    remove_undef => $self->remove_undef,
     value => c(map {
       $self->new(
         deref_arrays => $self->deref_arrays,
@@ -93,7 +94,7 @@ sub jp ($self, @pointer) {
 
 sub to_string ($self, $delimiter="\t") {
   return ref $self->value && $self->value->isa('Mojo::Collection')
-    ? $self->value->map('json')->grep_defined(!$self->remove_undef)->join($delimiter)
+    ? $self->value->map('json')->grep_defined($self->remove_undef)->map(sub{$_//''})->join($delimiter)
     : $self->json;
   my $value = $self->value;
   if (!ref $value) { return $value }
